@@ -1,22 +1,41 @@
 // Experimentations
+#include <stdint.h>
+#include <string>
+#include <vector>
+#include <map>
 
-enum const InfluxDbPrecision
-{
-    ns, us, ms, s
-};
+#include <iostream>
+
+enum class InfluxDbPrecision { ns, us, ms, s };
 
 class InfluxDbClient
 {
-public:
-    InfluxDbClient(const std::string& Endpoint)
+public:    
+    InfluxDbClient(const std::string& Endpoint, const std::string& Token)
+        : token("Token " + Token)
     {
         url = Endpoint;
-        if (!url.endsWith("/")
+        if (!url.ends_with("/"))
             url += "/";
     }
-            
-    void SetOrganisation(const std::string& Organisation) { organisation = Organisation; }
-    void SetBucket(const std::string& Bucket) { bucket = Bucket; }
+
+    // TODO: Send with a vector of all of this
+    void Send(const std::string& Measure, const std::map<std::string, std::string>& Tags, const std::map<std::string, std::string>& Fields, int64_t Timestamp = -1)
+    {
+        std::string packet = GetLine(Measure, Tags, Fields, Timestamp);
+        std::cout << packet;
+    }
+    
+    void SetOrganisation(const std::string& Organisation)
+    {
+        organisation = Organisation;
+    }
+    
+    void SetBucket(const std::string& Bucket)
+    {
+        bucket = Bucket;
+    }
+    
     void SetPrecision(InfluxDbPrecision Precision)
     {
         if (Precision == InfluxDbPrecision::ns)
@@ -30,6 +49,34 @@ public:
     }
   
 private:
+    std::string GetLine(const std::string& Measure, const std::map<std::string, std::string>& Tags, const std::map<std::string, std::string>& Fields, int64_t Timestamp)
+    {
+        std::string output;
+        output += Measure;
+        
+        for (auto& tag: Tags)
+            output += "," + tag.first + "=" + tag.second;
+        
+        output += " ";
+        
+        auto&& it = Fields.begin();
+
+        if (Fields.size() >= 1) [[likely]]
+        {
+            output += it->first + "=" + it->second;
+            std::advance(it, 1);
+        }
+        
+        for (; it != Fields.end() ; it++)
+            output += "," + it->first + "=" + it->second;
+
+        if (Timestamp != -1) [[unlikely]]
+            output += " " + std::to_string(Timestamp);
+
+        return output;
+    }
+            
+    std::string token;
     std::string url;
     std::string organisation;
     std::string bucket;
@@ -38,25 +85,19 @@ private:
 
 int main(int, char**)
 {
-    InfluxDbClient client("http://127.0.0.1:8086/api/v2/");
+    InfluxDbClient client("http://127.0.0.1:8086/api/v2/", "token");
     client.SetOrganisation("YOUR_ORG");
     client.SetBucket("YOUR_BUCKET");
     client.SetPrecision(InfluxDbPrecision::ms);
+    
+    client.Send("mem",
+        {
+            {"host", "host1"},
+        },
+        {
+            {"used_percent", "23.43234543"},
+            {"used_str", "\"fezfzefze\""},
+        },
+        1556896326
+    );
 }
-
-/*
-Organization	Use the org query parameter in your request URL.
-Bucket	Use the bucket query parameter in your request URL.
-Precision	Use the precision query parameter in your request URL.
-Authentication token	Use the Authorization: Token header.
-Line protocol	Pass as plain text in your request body.
-
-curl --request POST "http://localhost:8086/api/v2/write?org=YOUR_ORG&bucket=YOUR_BUCKET&precision=s" \
-  --header "Authorization: Token YOURAUTHTOKEN" \
-  --data-raw "
-mem,host=host1 used_percent=23.43234543 1556896326
-mem,host=host2 used_percent=26.81522361 1556896326
-mem,host=host1 used_percent=22.52984738 1556896336
-mem,host=host2 used_percent=27.18294630 1556896336
-"
-*/
