@@ -1,5 +1,5 @@
 # InfluxDb-Cpp-client
-Async InfluxDB C++ Client using Asio
+InfluxDB C++ Client using Asio
 
 ## What is working
 - [x] Send a measure through HTTP, sync
