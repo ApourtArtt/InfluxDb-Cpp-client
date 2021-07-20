@@ -3,6 +3,7 @@
 #include <string>
 #include <vector>
 #include <map>
+#include <variant>
 
 #include <iostream>
 
@@ -10,7 +11,9 @@ enum class InfluxDbPrecision { ns, us, ms, s };
 
 class InfluxDbClient
 {
-public:    
+public:
+    typedef std::variant< double, uint64_t, int64_t, std::string> FieldValue;
+
     InfluxDbClient(const std::string& Endpoint, const std::string& Token)
         : token("Token " + Token)
     {
@@ -20,9 +23,9 @@ public:
     }
 
     // TODO: Send with a vector of all of this
-    void Send(const std::string& Measure, const std::map<std::string, std::string>& Tags, const std::map<std::string, std::string>& Fields, int64_t Timestamp = -1)
+    void Send(const std::string& Measure, const std::map<std::string, std::string>& Tags, const std::map<std::string, FieldValue>& Fields, int64_t Timestamp = -1)
     {
-        std::string packet = GetLine(Measure, Tags, Fields, Timestamp);
+        std::string packet = getLine(Measure, Tags, Fields, Timestamp);
         std::cout << packet;
     }
     
@@ -49,7 +52,7 @@ public:
     }
   
 private:
-    std::string GetLine(const std::string& Measure, const std::map<std::string, std::string>& Tags, const std::map<std::string, std::string>& Fields, int64_t Timestamp)
+    std::string getLine(const std::string& Measure, const std::map<std::string, std::string>& Tags, const std::map<std::string, FieldValue>& Fields, int64_t Timestamp)
     {
         std::string output;
         output += Measure;
@@ -63,19 +66,31 @@ private:
 
         if (Fields.size() >= 1) [[likely]]
         {
-            output += it->first + "=" + it->second;
+            output += it->first + "=" + getFieldValue(it->second);
             std::advance(it, 1);
         }
         
         for (; it != Fields.end() ; it++)
-            output += "," + it->first + "=" + it->second;
+            output += "," + it->first + "=" + getFieldValue(it->second);
 
         if (Timestamp != -1) [[unlikely]]
             output += " " + std::to_string(Timestamp);
 
         return output;
     }
-            
+
+    template<class... Ts> struct overloaded : Ts... { using Ts::operator()...; };
+    std::string getFieldValue(const FieldValue& Value)
+    {
+        return std::visit(overloaded {
+            //[](bool value) { if (value) return "true"; return "false"; },
+            [](double value) { return std::to_string(value); },
+            [](uint64_t value) { return std::to_string(value) + "u"; },
+            [](int64_t value) { return std::to_string(value) + "i"; },
+            [](const std::string& value) { return value; },
+        }, Value);
+    }
+    
     std::string token;
     std::string url;
     std::string organisation;
@@ -95,7 +110,7 @@ int main(int, char**)
             {"host", "host1"},
         },
         {
-            {"used_percent", "23.43234543"},
+            {"used_percent", 23.43234543},
             {"used_str", "\"fezfzefze\""},
         },
         1556896326
