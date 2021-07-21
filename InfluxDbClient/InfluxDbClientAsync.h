@@ -1,12 +1,17 @@
 #pragma once
 #include "InfluxDbClient.h"
 
-class InfluxDbClientAsync : public InfluxDbClient
+class InfluxDbClientAsync : public InfluxDbClient, public std::enable_shared_from_this<InfluxDbClientAsync>
 {
 public:
 	InfluxDbClientAsync(const std::string& Host, uint16_t Port, const std::string& Token)
 		: InfluxDbClient(Host, Port, Token)
 	{}
+
+    ~InfluxDbClientAsync()
+    {
+        Close();
+    }
 
 	virtual void Connect()
 	{
@@ -25,8 +30,8 @@ public:
 
     virtual void Send()
     {
-        asio::streambuf request;
-        std::ostream request_stream(&request);
+        asio::streambuf* request = new asio::streambuf;
+        std::ostream request_stream(request);
 
         influx.lock();
 
@@ -37,8 +42,9 @@ public:
 
         request_stream << p.size() << "\r\n\r\n";
         request_stream << p;
-        asio::async_write(socket, request, [self = shared_from_this()](const asio::error_code& err, size_t length)
+        asio::async_write(socket, *request, [request, self = shared_from_this()](const asio::error_code& err, size_t length)
         {
+            delete request;
 #ifdef INFLUX_DEBUG
             asio::streambuf response;
             asio::read_until(self->socket, response, "\r\n");
@@ -57,7 +63,10 @@ public:
                 std::cout << "Worked";
 #endif
         });
-        thread = std::thread([&] { ioCtx.run(); });
+        thread = std::thread([self = shared_from_this()]
+        {
+            self->ioCtx.run();
+        });
     }
 
 private:
