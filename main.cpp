@@ -14,11 +14,10 @@ class InfluxDbClient
 public:
     typedef std::variant<bool, double, uint64_t, int64_t, std::string> FieldValue;
 
-    InfluxDbClient(const std::string& Host, uint16_t Port, const std::string& Token, bool IsHttp)
+    InfluxDbClient(const std::string& Host, uint16_t Port, const std::string& Token)
         : host(Host)
         , port(std::to_string(Port))
         , token(Token)
-        , isHttp(IsHttp)
         , precision("ms")
         , resolver(ioCtx)
         , socket(ioCtx)
@@ -33,8 +32,7 @@ public:
     void Send(const std::string& Measure, const std::map<std::string, std::string>& Tags, const std::map<std::string, FieldValue>& Fields, int64_t Timestamp = 0)
     {
         std::string packet = getLine(Measure, Tags, Fields, Timestamp);
-        if (isHttp)
-            sendHttp(packet);
+        sendHttp(packet);
     }
 
     void SetOrganisation(const std::string& Organisation)
@@ -115,10 +113,7 @@ private:
 
     void rebuildRequestSkeleton()
     {
-        if (isHttp)
-            req = "POST http://" + host + ":" + port + "/api/v2/write?org=" + organisation + "&bucket=" + bucket + "&precision=" + precision + " HTTP/1.0\r\n";
-        else /* if udp */
-            req = ""; // TODO
+        req = "POST http://" + host + ":" + port + "/api/v2/write?org=" + organisation + "&bucket=" + bucket + "&precision=" + precision + " HTTP/1.0\r\n";
 
         if (!token.empty()) [[likely]]
             req += "Authorization: Token " + token + "\r\n";
@@ -131,7 +126,6 @@ private:
     std::string host;
     std::string port;
     std::string token;
-    bool isHttp;
     std::string organisation;
     std::string bucket;
     std::string precision;
@@ -145,7 +139,7 @@ private:
 
 int main(int, char**)
 {
-    InfluxDbClient client("127.0.0.1", 8086, "Token", true);
+    InfluxDbClient client("127.0.0.1", 8086, "Token");
     client.SetOrganisation("Orga");
     client.SetBucket("test");
     client.SetPrecision(InfluxDbPrecision::s);
