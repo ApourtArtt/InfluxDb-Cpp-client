@@ -3,7 +3,7 @@ InfluxDB C++ Client using Asio
 
 ## What is working
 - [x] Send a measure through HTTP, sync
-- [ ] Send a measure through HTTP, async
+- [x] Send a measure through HTTP, async
 - [ ] (Not planned) Send a measure through UDP, sync
 - [ ] (Not planned) Send a measure through UDP, async
 
